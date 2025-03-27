@@ -8,7 +8,7 @@ class Unit:
     def __init__(self, x, y, color, hp=10, attack=3, max_moves=3, attack_range=1):
         self.x = x
         self.y = y
-        self.start_x = x  # Starting position for movement this turn
+        self.start_x = x 
         self.start_y = y
         self.color = color
         self.hp = hp
@@ -16,6 +16,7 @@ class Unit:
         self.max_moves = max_moves
         self.moves_used = 0
         self.attack_range = attack_range
+        self.has_attacked = False
 
     def draw(self, surface, font):
         rect = pygame.Rect(self.x * TILE_SIZE, self.y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
@@ -40,6 +41,7 @@ class Unit:
         self.start_x = self.x
         self.start_y = self.y
         self.moves_used = 0
+        self.has_attacked = False  # Reset the attack flag for a new turn
 
     def attack_target(self, target):
         target.hp -= self.attack

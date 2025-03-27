@@ -4,6 +4,7 @@ import random
 from units import Unit, TILE_SIZE, GRID_WIDTH, GRID_HEIGHT
 from enemies import Enemy
 
+# Initialize Pygame
 pygame.init()
 
 # Constants
@@ -50,7 +51,7 @@ def sign(x):
 
 # Create the player unit (blue)
 player_unit = Unit(5, 5, BLUE, hp=10, attack=3)
-selected_unit = None  
+selected_unit = None  # For player input during the player's turn
 
 # Create enemy units (red) at random positions
 enemy_units = []
@@ -68,7 +69,7 @@ enemy_index = 0  # Which enemy is acting during the enemy turn
 
 running = True
 while running:
-    # Check if the player has been defeated
+    # End game if player is defeated
     if player_unit.hp <= 0:
         print("Game Over! The player has been defeated.")
         running = False
@@ -77,6 +78,8 @@ while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+
+            # Click to select the player unit
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
                 grid_x = pos[0] // TILE_SIZE
@@ -85,6 +88,8 @@ while running:
                     selected_unit = player_unit
                 else:
                     selected_unit = None
+
+            # Handle movement, attack, and wait actions
             elif event.type == pygame.KEYDOWN and selected_unit:
                 if event.key == pygame.K_LEFT:
                     selected_unit.move(-1, 0)
@@ -94,43 +99,55 @@ while running:
                     selected_unit.move(0, -1)
                 elif event.key == pygame.K_DOWN:
                     selected_unit.move(0, 1)
+                # Attack action; turn ends automatically after attacking
                 elif event.key == pygame.K_a:
-                    # Attack the first enemy in range
-                    for enemy in enemy_units[:]:
-                        if abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) <= player_unit.attack_range:
-                            player_unit.attack_target(enemy)
-                            print(f"Player attacked enemy at ({enemy.x}, {enemy.y}). Enemy HP is now {enemy.hp}.")
-                            if enemy.hp <= 0:
-                                print(f"Enemy at ({enemy.x}, {enemy.y}) defeated!")
-                                enemy_units.remove(enemy)
-                            break
-                elif event.key == pygame.K_RETURN:
+                    if not selected_unit.has_attacked:
+                        for enemy in enemy_units[:]:
+                            if abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) <= player_unit.attack_range:
+                                player_unit.attack_target(enemy)
+                                selected_unit.has_attacked = True
+                                print(f"Player attacked enemy at ({enemy.x}, {enemy.y}). Enemy HP is now {enemy.hp}.")
+                                if enemy.hp <= 0:
+                                    print(f"Enemy at ({enemy.x}, {enemy.y}) defeated!")
+                                    enemy_units.remove(enemy)
+                                break
+                    # End the turn after an attack
+                    selected_unit.reset_moves()
+                    selected_unit = None
+                    turn = "enemy"
+                    enemy_index = 0
+                # Wait action: end the player's turn without attacking
+                elif event.key == pygame.K_w:
                     selected_unit.reset_moves()
                     selected_unit = None
                     turn = "enemy"
                     enemy_index = 0
 
     elif turn == "enemy":
-        # Process events to allow closing the window during enemy turn
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
 
         if enemy_index < len(enemy_units):
             enemy = enemy_units[enemy_index]
-            # If enemy is in attack range, attack the player.
-            if abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) <= enemy.attack_range:
-                enemy.attack_target(player_unit)
-                print(f"Enemy at ({enemy.x}, {enemy.y}) attacked player. Player HP is now {player_unit.hp}.")
-            else:
-                # Use full movement range: move until within attack range or movement is exhausted.
-                while enemy.moves_used < enemy.max_moves and (abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) > enemy.attack_range):
-                    dx = sign(player_unit.x - enemy.x)
-                    dy = sign(player_unit.y - enemy.y)
-                    if abs(player_unit.x - enemy.x) >= abs(player_unit.y - enemy.y):
-                        enemy.move(dx, 0)
-                    else:
-                        enemy.move(0, dy)
+            if not enemy.has_attacked:
+                if abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) <= enemy.attack_range:
+                    enemy.attack_target(player_unit)
+                    enemy.has_attacked = True
+                    print(f"Enemy at ({enemy.x}, {enemy.y}) attacked player. Player HP is now {player_unit.hp}.")
+                else:
+                    # Use full movement range until in attack range or movement is exhausted.
+                    while enemy.moves_used < enemy.max_moves and (abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) > enemy.attack_range):
+                        dx = sign(player_unit.x - enemy.x)
+                        dy = sign(player_unit.y - enemy.y)
+                        if abs(player_unit.x - enemy.x) >= abs(player_unit.y - enemy.y):
+                            enemy.move(dx, 0)
+                        else:
+                            enemy.move(0, dy)
+                    if abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) <= enemy.attack_range and not enemy.has_attacked:
+                        enemy.attack_target(player_unit)
+                        enemy.has_attacked = True
+                        print(f"Enemy at ({enemy.x}, {enemy.y}) attacked player after moving. Player HP is now {player_unit.hp}.")
             enemy.reset_moves()
             enemy_index += 1
             pygame.time.wait(300)
@@ -142,19 +159,18 @@ while running:
 
     screen.fill(BLACK)
     draw_grid(screen)
-
     if turn == "player" and selected_unit:
         highlight_movement_range(selected_unit, screen)
         highlight_attack_range(selected_unit, screen)
-
     for enemy in enemy_units:
         enemy.draw(screen, font)
     player_unit.draw(screen, font)
-
     pygame.display.flip()
     clock.tick(FPS)
 
 pygame.quit()
 sys.exit()
+
+
 
 
