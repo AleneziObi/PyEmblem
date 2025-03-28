@@ -4,10 +4,8 @@ import random
 from units import Unit, TILE_SIZE, GRID_WIDTH, GRID_HEIGHT
 from enemies import Enemy
 
-# Initialize Pygame
 pygame.init()
 
-# Constants
 FPS = 60
 SCREEN_WIDTH = TILE_SIZE * GRID_WIDTH
 SCREEN_HEIGHT = TILE_SIZE * GRID_HEIGHT
@@ -16,7 +14,7 @@ SCREEN_HEIGHT = TILE_SIZE * GRID_HEIGHT
 WHITE  = (255, 255, 255)
 GRAY   = (200, 200, 200)
 RED    = (255, 0, 0)      # For enemy units and movement range highlight
-BLUE   = (0, 0, 255)      # For the player unit
+BLUE   = (0, 0, 255)      # For the player unit (not used now)
 BLACK  = (0, 0, 0)
 GREEN  = (0, 255, 0)      # For attack range highlight
 
@@ -24,6 +22,10 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Fire Emblem Clone - Turn-Based Combat")
 clock = pygame.time.Clock()
 font = pygame.font.SysFont(None, 24)
+
+# Load the background image
+background = pygame.image.load("Assets/TestMap.jpg").convert()
+background = pygame.transform.scale(background, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
 def draw_grid(surface):
     for x in range(GRID_WIDTH):
@@ -49,8 +51,20 @@ def highlight_attack_range(unit, surface):
 def sign(x):
     return (x > 0) - (x < 0)
 
-# Create the player unit (blue)
+# Create the player unit (Marth)
 player_unit = Unit(5, 5, BLUE, hp=10, attack=3)
+player_image = pygame.image.load("Assets/Marth.png").convert_alpha()
+player_image = pygame.transform.scale(player_image, (TILE_SIZE, TILE_SIZE))
+player_unit.image = player_image
+
+def draw_player(surface, font):
+    surface.blit(player_unit.image, (player_unit.x * TILE_SIZE, player_unit.y * TILE_SIZE))
+    hp_text = font.render(str(player_unit.hp), True, WHITE)
+    text_rect = hp_text.get_rect(center=(player_unit.x * TILE_SIZE + TILE_SIZE // 2,
+                                          player_unit.y * TILE_SIZE + TILE_SIZE // 2))
+    surface.blit(hp_text, text_rect)
+player_unit.draw = draw_player
+
 selected_unit = None  # For player input during the player's turn
 
 # Create enemy units (red) at random positions
@@ -69,7 +83,6 @@ enemy_index = 0  # Which enemy is acting during the enemy turn
 
 running = True
 while running:
-    # End game if player is defeated
     if player_unit.hp <= 0:
         print("Game Over! The player has been defeated.")
         running = False
@@ -78,8 +91,6 @@ while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-
-            # Click to select the player unit
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
                 grid_x = pos[0] // TILE_SIZE
@@ -88,8 +99,6 @@ while running:
                     selected_unit = player_unit
                 else:
                     selected_unit = None
-
-            # Handle movement, attack, and wait actions
             elif event.type == pygame.KEYDOWN and selected_unit:
                 if event.key == pygame.K_LEFT:
                     selected_unit.move(-1, 0)
@@ -99,7 +108,6 @@ while running:
                     selected_unit.move(0, -1)
                 elif event.key == pygame.K_DOWN:
                     selected_unit.move(0, 1)
-                # Attack action; turn ends automatically after attacking
                 elif event.key == pygame.K_a:
                     if not selected_unit.has_attacked:
                         for enemy in enemy_units[:]:
@@ -111,12 +119,10 @@ while running:
                                     print(f"Enemy at ({enemy.x}, {enemy.y}) defeated!")
                                     enemy_units.remove(enemy)
                                 break
-                    # End the turn after an attack
                     selected_unit.reset_moves()
                     selected_unit = None
                     turn = "enemy"
                     enemy_index = 0
-                # Wait action: end the player's turn without attacking
                 elif event.key == pygame.K_w:
                     selected_unit.reset_moves()
                     selected_unit = None
@@ -136,7 +142,6 @@ while running:
                     enemy.has_attacked = True
                     print(f"Enemy at ({enemy.x}, {enemy.y}) attacked player. Player HP is now {player_unit.hp}.")
                 else:
-                    # Use full movement range until in attack range or movement is exhausted.
                     while enemy.moves_used < enemy.max_moves and (abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) > enemy.attack_range):
                         dx = sign(player_unit.x - enemy.x)
                         dy = sign(player_unit.y - enemy.y)
@@ -157,7 +162,7 @@ while running:
             for enemy in enemy_units:
                 enemy.reset_moves()
 
-    screen.fill(BLACK)
+    screen.blit(background, (0, 0))
     draw_grid(screen)
     if turn == "player" and selected_unit:
         highlight_movement_range(selected_unit, screen)
@@ -170,7 +175,3 @@ while running:
 
 pygame.quit()
 sys.exit()
-
-
-
-

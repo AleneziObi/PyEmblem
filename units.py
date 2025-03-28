@@ -1,8 +1,8 @@
 import pygame
 
-TILE_SIZE = 40
-GRID_WIDTH = 16
-GRID_HEIGHT = 12
+TILE_SIZE = 80
+GRID_WIDTH = 6
+GRID_HEIGHT = 8
 
 class Unit:
     def __init__(self, x, y, color, hp=10, attack=3, max_moves=3, attack_range=1):
