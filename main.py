@@ -12,18 +12,17 @@ SCREEN_HEIGHT = TILE_SIZE * GRID_HEIGHT
 
 # Colors
 WHITE  = (255, 255, 255)
-GRAY   = (200, 200, 200)
-RED    = (255, 0, 0)      # For enemy units and movement range highlight
-BLUE   = (0, 0, 255)      # For the player unit (not used now)
 BLACK  = (0, 0, 0)
-GREEN  = (0, 255, 0)      # For attack range highlight
+GRAY   = (200, 200, 200)
+RED    = (255, 0, 0)      # movement range highlight
+GREEN  = (0, 255, 0)      # attack range highlight
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Fire Emblem Clone - Turn-Based Combat")
 clock = pygame.time.Clock()
 font = pygame.font.SysFont(None, 24)
 
-# Load the background image
+# Load and scale background
 background = pygame.image.load("Assets/TestMap.jpg").convert()
 background = pygame.transform.scale(background, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
@@ -51,23 +50,30 @@ def highlight_attack_range(unit, surface):
 def sign(x):
     return (x > 0) - (x < 0)
 
-# Create the player unit (Marth)
-player_unit = Unit(5, 5, BLUE, hp=10, attack=3)
+def draw_unit_with_hp(surface, unit, font):
+    # Blit unit.image at its grid pos and draw HP in a white box bottom-left
+    # sprite
+    surface.blit(unit.image, (unit.x * TILE_SIZE, unit.y * TILE_SIZE))
+    # white box dimensions
+    box_w, box_h = TILE_SIZE // 4, TILE_SIZE // 4
+    box_x = unit.x * TILE_SIZE
+    box_y = unit.y * TILE_SIZE + TILE_SIZE - box_h
+    # draw box
+    pygame.draw.rect(surface, WHITE, (box_x, box_y, box_w, box_h))
+    # render HP text in black
+    hp_text = font.render(str(unit.hp), True, BLACK)
+    surface.blit(hp_text, (box_x + 2, box_y + 1))
+
+# --- Setup player ---
+player_unit = Unit(5, 5, BLUE:=(0,0,255), hp=10, attack=3)
+# load Marth sprite
 player_image = pygame.image.load("Assets/Marth.png").convert_alpha()
 player_image = pygame.transform.scale(player_image, (TILE_SIZE, TILE_SIZE))
 player_unit.image = player_image
 
-def draw_player(surface, font):
-    surface.blit(player_unit.image, (player_unit.x * TILE_SIZE, player_unit.y * TILE_SIZE))
-    hp_text = font.render(str(player_unit.hp), True, WHITE)
-    text_rect = hp_text.get_rect(center=(player_unit.x * TILE_SIZE + TILE_SIZE // 2,
-                                          player_unit.y * TILE_SIZE + TILE_SIZE // 2))
-    surface.blit(hp_text, text_rect)
-player_unit.draw = draw_player
+selected_unit = None
 
-selected_unit = None  # For player input during the player's turn
-
-# Create enemy units (red) at random positions
+# --- Setup enemies ---
 enemy_units = []
 num_enemies = 3
 while len(enemy_units) < num_enemies:
@@ -75,72 +81,63 @@ while len(enemy_units) < num_enemies:
     ey = random.randint(0, GRID_HEIGHT - 1)
     if ex == player_unit.x and ey == player_unit.y:
         continue
-    enemy_units.append(Enemy(ex, ey, RED, hp=5, attack=2))
+    # each Enemy loads "Thief.png" internally and scales it
+    enemy_units.append(Enemy(ex, ey, RED:=(255,0,0), hp=5, attack=2))
 
-# Turn management variables
-turn = "player"  # "player" or "enemy"
-enemy_index = 0  # Which enemy is acting during the enemy turn
+# Turn variables
+turn = "player"
+enemy_index = 0
 
 running = True
 while running:
     if player_unit.hp <= 0:
         print("Game Over! The player has been defeated.")
-        running = False
+        break
 
     if turn == "player":
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                pos = pygame.mouse.get_pos()
-                grid_x = pos[0] // TILE_SIZE
-                grid_y = pos[1] // TILE_SIZE
-                if player_unit.x == grid_x and player_unit.y == grid_y:
-                    selected_unit = player_unit
-                else:
-                    selected_unit = None
+                mx, my = pygame.mouse.get_pos()
+                gx, gy = mx // TILE_SIZE, my // TILE_SIZE
+                selected_unit = player_unit if (gx, gy) == (player_unit.x, player_unit.y) else None
             elif event.type == pygame.KEYDOWN and selected_unit:
-                if event.key == pygame.K_LEFT:
-                    selected_unit.move(-1, 0)
-                elif event.key == pygame.K_RIGHT:
-                    selected_unit.move(1, 0)
-                elif event.key == pygame.K_UP:
-                    selected_unit.move(0, -1)
-                elif event.key == pygame.K_DOWN:
-                    selected_unit.move(0, 1)
+                if event.key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN):
+                    dx = (event.key == pygame.K_RIGHT) - (event.key == pygame.K_LEFT)
+                    dy = (event.key == pygame.K_DOWN) - (event.key == pygame.K_UP)
+                    selected_unit.move(dx, dy)
                 elif event.key == pygame.K_a:
                     if not selected_unit.has_attacked:
                         for enemy in enemy_units[:]:
                             if abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) <= player_unit.attack_range:
                                 player_unit.attack_target(enemy)
                                 selected_unit.has_attacked = True
-                                print(f"Player attacked enemy at ({enemy.x}, {enemy.y}). Enemy HP is now {enemy.hp}.")
                                 if enemy.hp <= 0:
-                                    print(f"Enemy at ({enemy.x}, {enemy.y}) defeated!")
                                     enemy_units.remove(enemy)
                                 break
+                    # end turn on attack
                     selected_unit.reset_moves()
                     selected_unit = None
                     turn = "enemy"
                     enemy_index = 0
                 elif event.key == pygame.K_w:
+                    # wait: end turn
                     selected_unit.reset_moves()
                     selected_unit = None
                     turn = "enemy"
                     enemy_index = 0
 
-    elif turn == "enemy":
+    else:  # enemy turn
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-
         if enemy_index < len(enemy_units):
             enemy = enemy_units[enemy_index]
             if not enemy.has_attacked:
                 if abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) <= enemy.attack_range:
                     enemy.attack_target(player_unit)
                     enemy.has_attacked = True
-                    print(f"Enemy at ({enemy.x}, {enemy.y}) attacked player. Player HP is now {player_unit.hp}.")
                 else:
                     while enemy.moves_used < enemy.max_moves and (abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) > enemy.attack_range):
                         dx = sign(player_unit.x - enemy.x)
@@ -152,26 +149,28 @@ while running:
                     if abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) <= enemy.attack_range and not enemy.has_attacked:
                         enemy.attack_target(player_unit)
                         enemy.has_attacked = True
-                        print(f"Enemy at ({enemy.x}, {enemy.y}) attacked player after moving. Player HP is now {player_unit.hp}.")
             enemy.reset_moves()
             enemy_index += 1
             pygame.time.wait(300)
         else:
             turn = "player"
             player_unit.reset_moves()
-            for enemy in enemy_units:
-                enemy.reset_moves()
+            for e in enemy_units:
+                e.reset_moves()
 
+    # draw everything
     screen.blit(background, (0, 0))
     draw_grid(screen)
     if turn == "player" and selected_unit:
         highlight_movement_range(selected_unit, screen)
         highlight_attack_range(selected_unit, screen)
     for enemy in enemy_units:
-        enemy.draw(screen, font)
-    player_unit.draw(screen, font)
+        draw_unit_with_hp(screen, enemy, font)
+    draw_unit_with_hp(screen, player_unit, font)
+
     pygame.display.flip()
     clock.tick(FPS)
 
 pygame.quit()
 sys.exit()
+
