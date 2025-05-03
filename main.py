@@ -26,6 +26,13 @@ font = pygame.font.SysFont(None, 24)
 background = pygame.image.load("Assets/TestMap.jpg").convert()
 background = pygame.transform.scale(background, (SCREEN_WIDTH, SCREEN_HEIGHT))
 
+attack_menu = False
+menu_enemy = None
+MENU_WIDTH, MENU_HEIGHT = 80, 30
+attack_btn = pygame.Rect(0, 0, MENU_WIDTH, MENU_HEIGHT)
+cancel_btn = pygame.Rect(0, 0, MENU_WIDTH, MENU_HEIGHT)
+end_turn_btn = pygame.Rect(10, SCREEN_HEIGHT - 40, 100, 30)
+
 def draw_grid(surface):
     for x in range(GRID_WIDTH):
         for y in range(GRID_HEIGHT):
@@ -91,86 +98,133 @@ enemy_index = 0
 running = True
 while running:
     if player_unit.hp <= 0:
-        print("Game Over! The player has been defeated.")
+        print("Game Over! Marth has fallen.")
+        running = False
         break
 
-    if turn == "player":
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                mx, my = pygame.mouse.get_pos()
-                gx, gy = mx // TILE_SIZE, my // TILE_SIZE
-                selected_unit = player_unit if (gx, gy) == (player_unit.x, player_unit.y) else None
-            elif event.type == pygame.KEYDOWN and selected_unit:
-                if event.key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN):
-                    dx = (event.key == pygame.K_RIGHT) - (event.key == pygame.K_LEFT)
-                    dy = (event.key == pygame.K_DOWN) - (event.key == pygame.K_UP)
-                    selected_unit.move(dx, dy)
-                elif event.key == pygame.K_a:
-                    if not selected_unit.has_attacked:
-                        for enemy in enemy_units[:]:
-                            if abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) <= player_unit.attack_range:
-                                player_unit.attack_target(enemy)
-                                selected_unit.has_attacked = True
-                                if enemy.hp <= 0:
-                                    enemy_units.remove(enemy)
-                                break
-                    # end turn on attack
-                    selected_unit.reset_moves()
-                    selected_unit = None
-                    turn = "enemy"
-                    enemy_index = 0
-                elif event.key == pygame.K_w:
-                    # wait: end turn
-                    selected_unit.reset_moves()
-                    selected_unit = None
-                    turn = "enemy"
-                    enemy_index = 0
+    # Quit check
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
 
-    else:  # enemy turn
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
+        # Mouse controls only
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            mx, my = event.pos
+            gx, gy = mx // TILE_SIZE, my // TILE_SIZE
+
+            # 1) If attack menu open, handle its buttons
+            if attack_menu:
+                if attack_btn.collidepoint(event.pos):
+                    player_unit.attack_target(menu_enemy)
+                    player_unit.has_attacked = True
+                    attack_menu = False
+                    selected_unit.reset_moves()
+                    selected_unit = None
+                    turn = "enemy"
+                    enemy_index = 0
+                elif cancel_btn.collidepoint(event.pos):
+                    attack_menu = False
+                continue
+
+            # 2) End Turn button
+            if selected_unit and end_turn_btn.collidepoint(event.pos):
+                selected_unit.reset_moves()
+                selected_unit = None
+                turn = "enemy"
+                enemy_index = 0
+                continue
+
+            # 3) Player turn interactions
+            if turn == "player":
+                # a) Select Marth
+                if (gx, gy) == (player_unit.x, player_unit.y):
+                    selected_unit = player_unit
+                    continue
+
+                # b) If selected and clicked adjacent enemy, open attack menu
+                if selected_unit:
+                    for e in enemy_units:
+                        if (e.x, e.y) == (gx, gy)\
+                           and abs(e.x - player_unit.x) + abs(e.y - player_unit.y) <= player_unit.attack_range:
+                            menu_enemy = e
+                            attack_menu = True
+                            attack_btn.topleft = (mx, my)
+                            cancel_btn.topleft = (mx, my + MENU_HEIGHT + 5)
+                            break
+                    else:
+                        # c) Movement: if within range, teleport Marth there
+                        dist = abs(gx - selected_unit.start_x) + abs(gy - selected_unit.start_y)
+                        if dist <= selected_unit.max_moves:
+                            selected_unit.x, selected_unit.y = gx, gy
+                            selected_unit.moves_used = dist
+
+    # 4) Enemy turn
+    if turn == "enemy":
         if enemy_index < len(enemy_units):
             enemy = enemy_units[enemy_index]
             if not enemy.has_attacked:
+                # Attack if adjacent
                 if abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) <= enemy.attack_range:
                     enemy.attack_target(player_unit)
                     enemy.has_attacked = True
                 else:
-                    while enemy.moves_used < enemy.max_moves and (abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) > enemy.attack_range):
+                    # Move full range toward player
+                    while enemy.moves_used < enemy.max_moves and \
+                          (abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) > enemy.attack_range):
                         dx = sign(player_unit.x - enemy.x)
                         dy = sign(player_unit.y - enemy.y)
                         if abs(player_unit.x - enemy.x) >= abs(player_unit.y - enemy.y):
                             enemy.move(dx, 0)
                         else:
                             enemy.move(0, dy)
-                    if abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) <= enemy.attack_range and not enemy.has_attacked:
+                    # Then attack if now in range
+                    if abs(enemy.x - player_unit.x) + abs(enemy.y - player_unit.y) <= enemy.attack_range \
+                       and not enemy.has_attacked:
                         enemy.attack_target(player_unit)
                         enemy.has_attacked = True
             enemy.reset_moves()
             enemy_index += 1
             pygame.time.wait(300)
         else:
+            # All enemies done → back to player
             turn = "player"
             player_unit.reset_moves()
             for e in enemy_units:
                 e.reset_moves()
 
-    # draw everything
+    # --- Drawing ---
     screen.blit(background, (0, 0))
     draw_grid(screen)
+
+    # Show movement & attack highlights if Marth is selected
     if turn == "player" and selected_unit:
         highlight_movement_range(selected_unit, screen)
         highlight_attack_range(selected_unit, screen)
+
+    # Draw End Turn button
+    pygame.draw.rect(screen, WHITE, end_turn_btn)
+    screen.blit(font.render("End Turn", True, BLACK),
+                (end_turn_btn.x + 5, end_turn_btn.y + 5))
+    
+    # Draw units with HP boxes
     for enemy in enemy_units:
         draw_unit_with_hp(screen, enemy, font)
     draw_unit_with_hp(screen, player_unit, font)
+
+    # Draw attack menu if open
+    if attack_menu:
+        bbox = attack_btn.union(cancel_btn).inflate(4, 4)
+        pygame.draw.rect(screen, WHITE, bbox)
+        pygame.draw.rect(screen, RED, attack_btn)
+        screen.blit(font.render("Attack", True, WHITE),
+                    (attack_btn.x + 5, attack_btn.y + 5))
+        pygame.draw.rect(screen, BLACK, cancel_btn)
+        screen.blit(font.render("Cancel", True, WHITE),
+                    (cancel_btn.x + 5, cancel_btn.y + 5))
+
 
     pygame.display.flip()
     clock.tick(FPS)
 
 pygame.quit()
 sys.exit()
-
