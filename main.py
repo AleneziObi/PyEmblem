@@ -64,13 +64,9 @@ def draw_unit(s, u):
     s.blit(txt, (bx+2, by+1))
 
 def is_occupied(x, y):
-    # Don’t allow moving into the player’s tile
-    if (player_unit.x, player_unit.y) == (x, y):
-        return True
-    # Don’t allow moving into any enemy tile
+    if (player_unit.x, player_unit.y)==(x,y): return True
     for e in enemy_units:
-        if (e.x, e.y) == (x, y):
-            return True
+        if (e.x, e.y)==(x,y): return True
     return False
 
 
@@ -79,6 +75,7 @@ player_unit = Unit(5,5, color=(0,0,255), hp=10, attack=3)
 m_img = pygame.image.load("Assets/Marth.png").convert_alpha()
 player_unit.image = pygame.transform.scale(m_img, (TILE_SIZE,TILE_SIZE))
 selected_unit = None
+player_unit.path = []
 
 # --- setup enemies (no overlap) ---
 enemy_units = []
@@ -162,9 +159,19 @@ while running:
                     # move one tile if in range
                     # movement: animate one step if in range AND target is free
                     dist = abs(gx-selected_unit.start_x)+abs(gy-selected_unit.start_y)
-                    if dist <= selected_unit.max_moves and not is_occupied(gx, gy):
-                        dx, dy = sign(gx-selected_unit.x), sign(gy-selected_unit.y)
-                        selected_unit.move(dx, dy)
+                    if dist<=selected_unit.max_moves and not is_occupied(gx,gy):
+                        # build straight‐line path: horizontal then vertical
+                        px, py = selected_unit.x, selected_unit.y
+                        path = []
+                        dx_total = gx - px
+                        dy_total = gy - py
+                        sx = sign(dx_total)
+                        for _ in range(abs(dx_total)):
+                            path.append((sx,0))
+                        sy = sign(dy_total)
+                        for _ in range(abs(dy_total)):
+                            path.append((0,sy))
+                        selected_unit.path = path
 
 
     # enemy turn
@@ -203,6 +210,15 @@ while running:
             player_unit.reset_moves()
             for e in enemy_units: 
                 e.reset_moves()
+    
+    if selected_unit is player_unit and not player_unit.animating and getattr(player_unit, 'path', []):
+        dx,dy = player_unit.path.pop(0)
+        # check occupancy before step
+        if not is_occupied(player_unit.x+dx, player_unit.y+dy):
+            player_unit.move(dx,dy)
+        else:
+            # blocked: clear path
+            player_unit.path = []
 
     # animations
     player_unit.update_animation()
