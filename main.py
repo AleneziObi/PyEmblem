@@ -18,7 +18,7 @@ RED   = (255,0,0)    # highlights & menu buttons
 GREEN = (0,255,0)    # attack range highlight
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Fire Emblem Clone - Mouse Controls")
+pygame.display.set_caption("Fire Emblem Heroes Clone")
 clock = pygame.time.Clock()
 font  = pygame.font.SysFont(None, 24)
 
@@ -77,7 +77,7 @@ player_unit.image = pygame.transform.scale(m_img, (TILE_SIZE,TILE_SIZE))
 selected_unit = None
 player_unit.path = []
 
-# --- setup enemies (no overlap) ---
+# --- setup enemies ---
 enemy_units = []
 occupied = {(player_unit.x, player_unit.y)}
 while len(enemy_units)<3:
@@ -107,7 +107,7 @@ while running:
             mx,my = ev.pos
             gx,gy = mx//TILE_SIZE, my//TILE_SIZE
 
-            # 1) attack menu?
+            # Attack Menu
             if attack_menu:
                 if attack_btn.collidepoint(ev.pos):
                     player_unit.attack_target(menu_enemy)
@@ -123,7 +123,7 @@ while running:
                     attack_menu=False
                 continue
 
-            # 2) end-turn menu?
+            # End-turn menu
             if end_menu:
                 if attack_btn.collidepoint(ev.pos):
                     selected_unit.reset_moves()
@@ -135,7 +135,7 @@ while running:
                     end_menu=False
                 continue
 
-            # 3) click on Marth?
+            # click on Marth
             if turn=="player" and (gx,gy)==(player_unit.x,player_unit.y):
                 if selected_unit is player_unit:
                     end_menu=True
@@ -174,41 +174,56 @@ while running:
                         selected_unit.path = path
 
 
-    # enemy turn
-    if turn=="enemy":
+    if turn == "enemy":
+        if player_unit.hp <= 0:
+            # Stop the game immediately if the player is defeated
+            print("Game Over! Marth has fallen.")
+            running = False
+            break
+
         if enemy_index < len(enemy_units):
             en = enemy_units[enemy_index]
             if not en.has_attacked:
-                if abs(en.x-player_unit.x)+abs(en.y-player_unit.y)<=en.attack_range:
+                if abs(en.x - player_unit.x) + abs(en.y - player_unit.y) <= en.attack_range:
                     en.attack_target(player_unit)
-                    en.has_attacked=True
+                    en.has_attacked = True
+                    if player_unit.hp <= 0:
+                        # Stop the game immediately if the player is defeated
+                        print("Game Over! Marth has fallen.")
+                        running = False
+                        break
                 else:
-                    # move full range
+                    # Move full range
                     while (not en.animating and
-                           en.moves_used<en.max_moves and
-                           abs(en.x-player_unit.x)+abs(en.y-player_unit.y)>en.attack_range):
-                        dx,dy = sign(player_unit.x-en.x), sign(player_unit.y-en.y)
-                        # prefer horizontal
+                        en.moves_used < en.max_moves and
+                        abs(en.x - player_unit.x) + abs(en.y - player_unit.y) > en.attack_range):
+                        dx, dy = sign(player_unit.x - en.x), sign(player_unit.y - en.y)
+                        # Prefer horizontal
                         if abs(player_unit.x - en.x) >= abs(player_unit.y - en.y):
                             if not is_occupied(en.x + dx, en.y):
                                 en.move(dx, 0)
                         else:
                             if not is_occupied(en.x, en.y + dy):
                                 en.move(0, dy)
-                    # then attack
+                    # Then attack
                     if (not en.animating and
-                        abs(en.x-player_unit.x)+abs(en.y-player_unit.y)<=en.attack_range and 
+                        abs(en.x - player_unit.x) + abs(en.y - player_unit.y) <= en.attack_range and
                         not en.has_attacked):
                         en.attack_target(player_unit)
-                        en.has_attacked=True
+                        en.has_attacked = True
+                        if player_unit.hp <= 0:
+                            # Stop the game immediately if the player is defeated
+                            print("Game Over! Marth has fallen.")
+                            running = False
+                            break
             if not en.animating:
                 en.reset_moves()
-                enemy_index+=1
+                enemy_index += 1
                 pygame.time.wait(300)
         else:
-            turn="player"
+            turn = "player"
             player_unit.reset_moves()
-            for e in enemy_units: 
+            for e in enemy_units:
                 e.reset_moves()
     
     if selected_unit is player_unit and not player_unit.animating and getattr(player_unit, 'path', []):
