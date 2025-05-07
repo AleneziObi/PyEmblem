@@ -34,6 +34,7 @@ background = pygame.transform.scale(bg, (SCREEN_WIDTH, SCREEN_HEIGHT))
 attack_menu = False
 end_menu    = False
 menu_enemy  = None
+attack_anim = None
 MENU_W, MENU_H = 80, 30
 attack_btn   = pygame.Rect(0,0,MENU_W,MENU_H)
 cancel_btn   = pygame.Rect(0,0,MENU_W,MENU_H)
@@ -72,6 +73,9 @@ def is_occupied(x, y):
     for e in enemy_units:
         if (e.x, e.y)==(x,y): return True
     return False
+
+ATTACK_FRAMES = 8
+ATTACK_OFFSET =TILE_SIZE // 6
 
 
 # --- setup Marth ---
@@ -113,19 +117,20 @@ while running:
 
             # Attack Menu
             if attack_menu:
-                if attack_btn.collidepoint(ev.pos):
-                    player_unit.attack_target(menu_enemy)
-                    hit_sound.play() 
-                    player_unit.has_attacked=True
-                    if menu_enemy.hp<=0:
-                        enemy_units.remove(menu_enemy)
-                    attack_menu=False
-                    selected_unit.reset_moves()
-                    selected_unit=None
-                    turn="enemy"
-                    enemy_index=0
+                if attack_btn.collidepoint(ev.pos) and not attack_anim:
+                    dx = sign(menu_enemy.x - player_unit.x)
+                    dy = sign(menu_enemy.y - player_unit.y)
+                    attack_anim = {
+                        "attacker": player_unit,
+                        "target": menu_enemy,
+                        "dx": dx,
+                        "dy": dy,
+                        "frame": 0,       
+                    }
+                    attack_menu = False
+                
                 elif cancel_btn.collidepoint(ev.pos):
-                    attack_menu=False
+                    attack_menu = False
                 continue
 
             # End-turn menu
@@ -180,49 +185,42 @@ while running:
 
 
     if turn == "enemy":
-        if player_unit.hp <= 0:
-            # Stop the game immediately if the player is defeated
-            print("Game Over! Marth has fallen.")
-            running = False
-            break
-
         if enemy_index < len(enemy_units):
             en = enemy_units[enemy_index]
             if not en.has_attacked:
                 if abs(en.x - player_unit.x) + abs(en.y - player_unit.y) <= en.attack_range:
-                    en.attack_target(player_unit)
-                    hit_sound.play() 
-                    en.has_attacked = True
-                    if player_unit.hp <= 0:
-                        # Stop the game immediately if the player is defeated
-                        print("Game Over! Marth has fallen.")
-                        running = False
-                        break
+                    if not attack_anim:
+                        dx = sign(player_unit.x - en.x)
+                        dy = sign(player_unit.y - en.y)
+                        attack_anim = {
+                            'attacker': en,
+                            'target':   player_unit,
+                            'dx':       dx,
+                            'dy':       dy,
+                            'frame':    0
+                        }
                 else:
-                    # Move full range
-                    while (not en.animating and
-                        en.moves_used < en.max_moves and
-                        abs(en.x - player_unit.x) + abs(en.y - player_unit.y) > en.attack_range):
+                    while not en.animating and en.moves_used < en.max_moves and \
+                          abs(en.x - player_unit.x) + abs(en.y - player_unit.y) > en.attack_range:
                         dx, dy = sign(player_unit.x - en.x), sign(player_unit.y - en.y)
-                        # Prefer horizontal
                         if abs(player_unit.x - en.x) >= abs(player_unit.y - en.y):
                             if not is_occupied(en.x + dx, en.y):
                                 en.move(dx, 0)
                         else:
                             if not is_occupied(en.x, en.y + dy):
                                 en.move(0, dy)
-                    # Then attack
-                    if (not en.animating and
-                        abs(en.x - player_unit.x) + abs(en.y - player_unit.y) <= en.attack_range and
-                        not en.has_attacked):
-                        en.attack_target(player_unit)
-                        en.has_attacked = True
-                        if player_unit.hp <= 0:
-                            # Stop the game immediately if the player is defeated
-                            print("Game Over! Marth has fallen.")
-                            running = False
-                            break
-            if not en.animating:
+                    # then schedule attack animation
+                    if not en.animating and abs(en.x - player_unit.x) + abs(en.y - player_unit.y) <= en.attack_range and not en.has_attacked:
+                        dx = sign(player_unit.x - en.x)
+                        dy = sign(player_unit.y - en.y)
+                        attack_anim = {
+                            'attacker': en,
+                            'target':   player_unit,
+                            'dx':       dx,
+                            'dy':       dy,
+                            'frame':    0
+                        }
+            if not en.animating and not attack_anim:
                 en.reset_moves()
                 enemy_index += 1
                 pygame.time.wait(300)
@@ -240,6 +238,37 @@ while running:
         else:
             # blocked: clear path
             player_unit.path = []
+    
+    # Process attack animation
+    if attack_anim:
+        A = attack_anim
+        atk = A['attacker']
+        tgt = A['target']
+        f   = A['frame']
+        # calculate offset
+        t = f / (ATTACK_FRAMES / 2)
+        offset = ATTACK_OFFSET * (1 - abs(1 - t))
+        atk.pixel_x = atk.x * TILE_SIZE + A['dx'] * offset
+        atk.pixel_y = atk.y * TILE_SIZE + A['dy'] * offset
+        A['frame'] += 1
+        # mid‐animation damage
+        if A['frame'] == ATTACK_FRAMES // 2:
+            atk.attack_target(tgt)
+            hit_sound.play()
+            atk.has_attacked = True
+            if tgt.hp <= 0 and tgt in enemy_units:
+                enemy_units.remove(tgt)
+        # end animation
+        if A['frame'] >= ATTACK_FRAMES:
+            atk.pixel_x = atk.x * TILE_SIZE
+            atk.pixel_y = atk.y * TILE_SIZE
+            # advance turn if player attacked
+            if atk is player_unit:
+                selected_unit.reset_moves()
+                selected_unit = None
+                turn = "enemy"
+                enemy_index = 0
+            attack_anim = None
 
     # animations
     player_unit.update_animation()
@@ -277,5 +306,3 @@ while running:
 
 pygame.quit()
 sys.exit()
-
-# Retro Hurt Sound Effect by Driken5428 from Pixabay 
