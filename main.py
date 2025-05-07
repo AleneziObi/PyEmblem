@@ -5,6 +5,7 @@ from units import Unit, TILE_SIZE, GRID_WIDTH, GRID_HEIGHT
 from enemies import Enemy
 
 pygame.init()
+pygame.mixer.init()
 
 FPS = 60
 SCREEN_WIDTH = TILE_SIZE * GRID_WIDTH
@@ -21,6 +22,9 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Fire Emblem Heroes Clone")
 clock = pygame.time.Clock()
 font  = pygame.font.SysFont(None, 24)
+
+# sound effects
+hit_sound = pygame.mixer.Sound("Assets/retro-hurt-1-236672.mp3")
 
 # Background
 bg = pygame.image.load("Assets/TestMap.jpg").convert()
@@ -111,6 +115,7 @@ while running:
             if attack_menu:
                 if attack_btn.collidepoint(ev.pos):
                     player_unit.attack_target(menu_enemy)
+                    hit_sound.play() 
                     player_unit.has_attacked=True
                     if menu_enemy.hp<=0:
                         enemy_units.remove(menu_enemy)
@@ -186,6 +191,7 @@ while running:
             if not en.has_attacked:
                 if abs(en.x - player_unit.x) + abs(en.y - player_unit.y) <= en.attack_range:
                     en.attack_target(player_unit)
+                    hit_sound.play() 
                     en.has_attacked = True
                     if player_unit.hp <= 0:
                         # Stop the game immediately if the player is defeated
@@ -271,3 +277,5 @@ while running:
 
 pygame.quit()
 sys.exit()
+
+# Retro Hurt Sound Effect by Driken5428 from Pixabay 
