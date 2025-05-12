@@ -2,6 +2,8 @@ import pygame
 import sys
 import random
 from units import Unit, TILE_SIZE, GRID_WIDTH, GRID_HEIGHT
+import animations
+import menu
 from enemies import Enemy
 
 pygame.init()
@@ -22,9 +24,6 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Fire Emblem Heroes Clone")
 clock = pygame.time.Clock()
 font  = pygame.font.SysFont(None, 24)
-
-# sound effects
-hit_sound = pygame.mixer.Sound("Assets/retro-hurt-1-236672.mp3")
 
 # Background
 bg = pygame.image.load("Assets/TestMap.jpg").convert()
@@ -74,9 +73,6 @@ def is_occupied(x, y):
         if (e.x, e.y)==(x,y): return True
     return False
 
-ATTACK_FRAMES = 8
-ATTACK_OFFSET =TILE_SIZE // 6
-
 
 # --- setup Marth ---
 player_unit = Unit(5,5, color=(0,0,255), hp=10, attack=3)
@@ -99,107 +95,65 @@ while len(enemy_units)<3:
 turn = "player"
 enemy_index = 0
 
+# Main loop
 running = True
 while running:
-    # game over
-    if player_unit.hp<=0:
+    if player_unit.hp <= 0:
         print("Game Over! Marth has fallen.")
         break
 
-    # input
+    # Input & menus
+    do_attack = do_endturn = False
     for ev in pygame.event.get():
-        if ev.type==pygame.QUIT:
-            running=False
+        if ev.type == pygame.QUIT:
+            running = False
 
-        elif ev.type==pygame.MOUSEBUTTONDOWN:
-            mx,my = ev.pos
-            gx,gy = mx//TILE_SIZE, my//TILE_SIZE
+        # Delegate to menu handler
+        (attack_menu, end_menu, menu_enemy, selected_unit,
+         turn, enemy_index, do_attack, do_endturn) = menu.handle_menu_events(
+            ev, attack_menu, end_menu, menu_enemy,
+            selected_unit, turn, enemy_index,
+            enemy_units, player_unit, TILE_SIZE
+        )
+        if do_attack:
+            attack_anim = animations.schedule_attack(player_unit, menu_enemy)
+        if do_endturn:
+            selected_unit.reset_moves()
+            selected_unit = None
+            turn = "enemy"
+            enemy_index = 0
 
-            # Attack Menu
-            if attack_menu:
-                if attack_btn.collidepoint(ev.pos) and not attack_anim:
-                    dx = sign(menu_enemy.x - player_unit.x)
-                    dy = sign(menu_enemy.y - player_unit.y)
-                    attack_anim = {
-                        "attacker": player_unit,
-                        "target": menu_enemy,
-                        "dx": dx,
-                        "dy": dy,
-                        "frame": 0,       
-                    }
-                    attack_menu = False
-                
-                elif cancel_btn.collidepoint(ev.pos):
-                    attack_menu = False
-                continue
+        # Movement click
+        if (ev.type == pygame.MOUSEBUTTONDOWN and
+            turn == "player" and selected_unit and
+            not attack_menu and not end_menu and
+            attack_anim is None):
+            mx, my = ev.pos
+            gx, gy = mx//TILE_SIZE, my//TILE_SIZE
+            dist = abs(gx - selected_unit.start_x) + abs(gy - selected_unit.start_y)
+            if dist <= selected_unit.max_moves and not is_occupied(gx, gy):
+                px, py = selected_unit.x, selected_unit.y
+                path = []
+                dx_tot = gx - px
+                sx = sign(dx_tot)
+                for _ in range(abs(dx_tot)):
+                    path.append((sx, 0))
+                dy_tot = gy - py
+                sy = sign(dy_tot)
+                for _ in range(abs(dy_tot)):
+                    path.append((0, sy))
+                selected_unit.path = path
 
-            # End-turn menu
-            if end_menu:
-                if attack_btn.collidepoint(ev.pos):
-                    selected_unit.reset_moves()
-                    selected_unit=None
-                    end_menu=False
-                    turn="enemy"
-                    enemy_index=0
-                elif cancel_btn.collidepoint(ev.pos):
-                    end_menu=False
-                continue
-
-            # click on Marth
-            if turn=="player" and (gx,gy)==(player_unit.x,player_unit.y):
-                if selected_unit is player_unit:
-                    end_menu=True
-                    attack_btn.topleft=(mx,my)
-                    cancel_btn.topleft=(mx,my+MENU_H+5)
-                else:
-                    selected_unit=player_unit
-                continue
-
-            # 4) attack or move
-            if turn=="player" and selected_unit:
-                # attack?
-                for e in enemy_units:
-                    if (e.x,e.y)==(gx,gy) and abs(e.x-player_unit.x)+abs(e.y-player_unit.y)<=player_unit.attack_range:
-                        menu_enemy=e
-                        attack_menu=True
-                        attack_btn.topleft=(mx,my)
-                        cancel_btn.topleft=(mx,my+MENU_H+5)
-                        break
-                else:
-                    # move one tile if in range
-                    # movement: animate one step if in range AND target is free
-                    dist = abs(gx-selected_unit.start_x)+abs(gy-selected_unit.start_y)
-                    if dist<=selected_unit.max_moves and not is_occupied(gx,gy):
-                        # build straight‐line path: horizontal then vertical
-                        px, py = selected_unit.x, selected_unit.y
-                        path = []
-                        dx_total = gx - px
-                        dy_total = gy - py
-                        sx = sign(dx_total)
-                        for _ in range(abs(dx_total)):
-                            path.append((sx,0))
-                        sy = sign(dy_total)
-                        for _ in range(abs(dy_total)):
-                            path.append((0,sy))
-                        selected_unit.path = path
-
-
-    if turn == "enemy":
+    # Enemy turn
+    if turn == "enemy" and attack_anim is None:
         if enemy_index < len(enemy_units):
             en = enemy_units[enemy_index]
             if not en.has_attacked:
+                # schedule attack if adjacent
                 if abs(en.x - player_unit.x) + abs(en.y - player_unit.y) <= en.attack_range:
-                    if not attack_anim:
-                        dx = sign(player_unit.x - en.x)
-                        dy = sign(player_unit.y - en.y)
-                        attack_anim = {
-                            'attacker': en,
-                            'target':   player_unit,
-                            'dx':       dx,
-                            'dy':       dy,
-                            'frame':    0
-                        }
+                    attack_anim = animations.schedule_attack(en, player_unit)
                 else:
+                    # move toward player
                     while not en.animating and en.moves_used < en.max_moves and \
                           abs(en.x - player_unit.x) + abs(en.y - player_unit.y) > en.attack_range:
                         dx, dy = sign(player_unit.x - en.x), sign(player_unit.y - en.y)
@@ -209,61 +163,26 @@ while running:
                         else:
                             if not is_occupied(en.x, en.y + dy):
                                 en.move(0, dy)
-                    # then schedule attack animation
-                    if not en.animating and abs(en.x - player_unit.x) + abs(en.y - player_unit.y) <= en.attack_range and not en.has_attacked:
-                        dx = sign(player_unit.x - en.x)
-                        dy = sign(player_unit.y - en.y)
-                        attack_anim = {
-                            'attacker': en,
-                            'target':   player_unit,
-                            'dx':       dx,
-                            'dy':       dy,
-                            'frame':    0
-                        }
-            if not en.animating and not attack_anim:
+                    # then schedule attack
+                    if abs(en.x - player_unit.x) + abs(en.y - player_unit.y) <= en.attack_range:
+                        attack_anim = animations.schedule_attack(en, player_unit)
+            if not en.animating and attack_anim is None:
                 en.reset_moves()
                 enemy_index += 1
-                pygame.time.wait(300)
         else:
             turn = "player"
             player_unit.reset_moves()
             for e in enemy_units:
                 e.reset_moves()
     
-    if selected_unit is player_unit and not player_unit.animating and getattr(player_unit, 'path', []):
-        dx,dy = player_unit.path.pop(0)
-        # check occupancy before step
-        if not is_occupied(player_unit.x+dx, player_unit.y+dy):
-            player_unit.move(dx,dy)
-        else:
-            # blocked: clear path
-            player_unit.path = []
+    animations.process_movement_path(player_unit, is_occupied)
     
     # Process attack animation
     if attack_anim:
-        A = attack_anim
-        atk = A['attacker']
-        tgt = A['target']
-        f   = A['frame']
-        # calculate offset
-        t = f / (ATTACK_FRAMES / 2)
-        offset = ATTACK_OFFSET * (1 - abs(1 - t))
-        atk.pixel_x = atk.x * TILE_SIZE + A['dx'] * offset
-        atk.pixel_y = atk.y * TILE_SIZE + A['dy'] * offset
-        A['frame'] += 1
-        # mid‐animation damage
-        if A['frame'] == ATTACK_FRAMES // 2:
-            atk.attack_target(tgt)
-            hit_sound.play()
-            atk.has_attacked = True
-            if tgt.hp <= 0 and tgt in enemy_units:
-                enemy_units.remove(tgt)
-        # end animation
-        if A['frame'] >= ATTACK_FRAMES:
-            atk.pixel_x = atk.x * TILE_SIZE
-            atk.pixel_y = atk.y * TILE_SIZE
-            # advance turn if player attacked
-            if atk is player_unit:
+        still = animations.process_attack_animation(attack_anim, enemy_units, player_unit)
+        if not still:
+            # if the player attacked, end their turn here:
+            if attack_anim["attacker"] is player_unit:
                 selected_unit.reset_moves()
                 selected_unit = None
                 turn = "enemy"
@@ -278,28 +197,16 @@ while running:
     # draw
     screen.blit(background,(0,0))
     draw_grid(screen)
-    if turn=="player" and selected_unit:
+
+    if turn == "player" and selected_unit:
         highlight_move(selected_unit, screen)
         highlight_attack(selected_unit, screen)
+
     for e in enemy_units:
         draw_unit(screen, e)
     draw_unit(screen, player_unit)
 
-    # menus
-    if attack_menu:
-        bb = attack_btn.union(cancel_btn).inflate(4,4)
-        pygame.draw.rect(screen,WHITE,bb)
-        pygame.draw.rect(screen,RED,attack_btn)
-        screen.blit(font.render("Attack",True,WHITE),(attack_btn.x+5,attack_btn.y+5))
-        pygame.draw.rect(screen,BLACK,cancel_btn)
-        screen.blit(font.render("Cancel",True,WHITE),(cancel_btn.x+5,cancel_btn.y+5))
-    if end_menu:
-        bb = attack_btn.union(cancel_btn).inflate(4,4)
-        pygame.draw.rect(screen,WHITE,bb)
-        pygame.draw.rect(screen,RED,attack_btn)
-        screen.blit(font.render("End Turn",True,WHITE),(attack_btn.x+5,attack_btn.y+5))
-        pygame.draw.rect(screen,BLACK,cancel_btn)
-        screen.blit(font.render("Cancel",True,WHITE),(cancel_btn.x+5,cancel_btn.y+5))
+    menu.draw_menus(screen, font, attack_menu, end_menu)
 
     pygame.display.flip()
     clock.tick(FPS)
