@@ -1,5 +1,5 @@
-# PyEmblem
-A tactical, grid-based RPG clone inspired by Fire Emblem, developed using Pygame
+   ![PyEmblem](https://github.com/user-attachments/assets/d3f395e2-4151-4955-bc9f-49917024e4cf)
+
 
 # 📋 Developer Notes
 5/6/2025 - Game crashes sometimes (to be fixed)
