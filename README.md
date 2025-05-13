@@ -1,4 +1,4 @@
-   ![PyEmblem](https://github.com/user-attachments/assets/d3f395e2-4151-4955-bc9f-49917024e4cf)
+
 
 
 # 📋 Developer Notes
