@@ -1,4 +1,5 @@
 import pygame
+from units import Unit, TILE_SIZE, GRID_WIDTH, GRID_HEIGHT
 
 # Menu button dimensions
 MENU_W, MENU_H = 80, 30
@@ -13,12 +14,14 @@ def handle_menu_events(event, attack_menu, end_menu, menu_enemy,
     
     do_attack = False
     do_endturn = False
-    # Only handle mouse clicks
+    
     if event.type != pygame.MOUSEBUTTONDOWN:
         return attack_menu, end_menu, menu_enemy, selected_unit, turn, enemy_index, do_attack, do_endturn
 
     mx, my = event.pos
     gx, gy = mx // TILE_SIZE, my // TILE_SIZE
+
+    sw, sh = pygame.display.get_surface().get_size()
 
     # 1) Attack menu interaction
     if attack_menu:
@@ -42,11 +45,30 @@ def handle_menu_events(event, attack_menu, end_menu, menu_enemy,
     if turn == "player" and (gx, gy) == (player_unit.x, player_unit.y):
         if selected_unit is player_unit:
             end_menu = True
-            attack_btn.topleft = (mx, my)
-            cancel_btn.topleft = (mx, my + MENU_H + 5)
+            tile_px = player_unit.x * TILE_SIZE
+
+            if player_unit.x < GRID_WIDTH / 2:
+                btn_x = tile_px
+            else:
+                btn_x = tile_px + TILE_SIZE - MENU_W
+            
+            # Determine vertical position: below tile if space, else above
+            tile_py = player_unit.y * TILE_SIZE
+            if tile_py + TILE_SIZE + MENU_H <= sh:
+                btn_y = tile_py + TILE_SIZE
+            else:
+                btn_y = tile_py - MENU_H
+            attack_btn.topleft = (btn_x, btn_y)
+            # Position cancel button below or above attack button
+            if btn_y + MENU_H + 5 + MENU_H <= sh:
+                cancel_y = btn_y + MENU_H + 5
+            else:
+                cancel_y = btn_y - MENU_H - 5
+            cancel_btn.topleft = (btn_x, cancel_y)
         else:
             selected_unit = player_unit
         return attack_menu, end_menu, menu_enemy, selected_unit, turn, enemy_index, do_attack, do_endturn
+
 
     # 4) Open attack menu on adjacent enemy click
     if turn == "player" and selected_unit:
@@ -54,8 +76,25 @@ def handle_menu_events(event, attack_menu, end_menu, menu_enemy,
             if (gx, gy) == (e.x, e.y) and abs(e.x - player_unit.x) + abs(e.y - player_unit.y) <= player_unit.attack_range:
                 menu_enemy = e
                 attack_menu = True
-                attack_btn.topleft = (mx, my)
-                cancel_btn.topleft = (mx, my + MENU_H + 5)
+                # Determine horizontal position relative to enemy tile
+                tile_px = e.x * TILE_SIZE
+                if e.x < GRID_WIDTH / 2:
+                    btn_x = tile_px
+                else:
+                    btn_x = tile_px + TILE_SIZE - MENU_W
+                # Determine vertical position
+                tile_py = e.y * TILE_SIZE
+                if tile_py + TILE_SIZE + MENU_H <= sh:
+                    btn_y = tile_py + TILE_SIZE
+                else:
+                    btn_y = tile_py - MENU_H
+                attack_btn.topleft = (btn_x, btn_y)
+                # Cancel button below or above
+                if btn_y + MENU_H + 5 + MENU_H <= sh:
+                    cancel_y = btn_y + MENU_H + 5
+                else:
+                    cancel_y = btn_y - MENU_H - 5
+                cancel_btn.topleft = (btn_x, cancel_y)
                 break
         return attack_menu, end_menu, menu_enemy, selected_unit, turn, enemy_index, do_attack, do_endturn
 

@@ -34,48 +34,50 @@ attack_menu = False
 end_menu    = False
 menu_enemy  = None
 attack_anim = None
-MENU_W, MENU_H = 80, 30
-attack_btn   = pygame.Rect(0,0,MENU_W,MENU_H)
-cancel_btn   = pygame.Rect(0,0,MENU_W,MENU_H)
 
+#Draw the map grid lines
 def draw_grid(s):
     for x in range(GRID_WIDTH):
         for y in range(GRID_HEIGHT):
             pygame.draw.rect(s, GRAY, (x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE), 1)
 
+# Highlight the move range
 def highlight_move(u, s):
     for x in range(GRID_WIDTH):
         for y in range(GRID_HEIGHT):
-            if abs(x-u.start_x)+abs(y-u.start_y) <= u.max_moves:
-                pygame.draw.rect(s, RED, (x*TILE_SIZE,y*TILE_SIZE,TILE_SIZE,TILE_SIZE),3)
+            if abs(x - u.start_x) + abs(y - u.start_y) <= u.max_moves:
+                pygame.draw.rect(s, RED, (x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE), 3)
 
+# Highlight attack range
 def highlight_attack(u, s):
     for x in range(GRID_WIDTH):
         for y in range(GRID_HEIGHT):
-            if abs(x-u.x)+abs(y-u.y) <= u.attack_range and (x,y)!=(u.x,u.y):
-                pygame.draw.rect(s, GREEN, (x*TILE_SIZE,y*TILE_SIZE,TILE_SIZE,TILE_SIZE),3)
+            if abs(x - u.x) + abs(y - u.y) <= u.attack_range and (x, y) != (u.x, u.y):
+                pygame.draw.rect(s, GREEN, (x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE), 3)
 
-def sign(v): return (v>0)-(v<0)
+# Sign function for movement
+def sign(v): return (v > 0) - ( v < 0 )
 
 def draw_unit(s, u):
     # sprite at pixel coords
     s.blit(u.image, (u.pixel_x, u.pixel_y))
     # hp box
-    bw, bh = TILE_SIZE//4, TILE_SIZE//4
-    bx, by = u.pixel_x, u.pixel_y+TILE_SIZE-bh
-    pygame.draw.rect(s, WHITE, (bx,by,bw,bh))
+    bw, bh = TILE_SIZE // 4, TILE_SIZE // 4
+    bx, by = u.pixel_x, u.pixel_y + TILE_SIZE - bh
+    pygame.draw.rect(s, WHITE, (bx, by, bw, bh))
     txt = font.render(str(u.hp), True, BLACK)
-    s.blit(txt, (bx+2, by+1))
+    s.blit(txt, (bx + 2, by + 1))
 
+# Check if a tile is occupied by an enemy or the player
 def is_occupied(x, y):
-    if (player_unit.x, player_unit.y)==(x,y): return True
+    if (player_unit.x, player_unit.y) == (x, y): return True
     for e in enemy_units:
-        if (e.x, e.y)==(x,y): return True
+        if (e.x, e.y) == (x, y): return True
     return False
 
 
 # --- setup Marth ---
-player_unit = Unit(5,5, color=(0,0,255), hp=10, attack=3)
+player_unit = Unit(5, 5, color=(0,0,255), hp=10, attack=3)
 m_img = pygame.image.load("Assets/Marth.png").convert_alpha()
 player_unit.image = pygame.transform.scale(m_img, (TILE_SIZE,TILE_SIZE))
 selected_unit = None
@@ -102,21 +104,20 @@ while running:
         print("Game Over! Marth has fallen.")
         break
 
-    # Input & menus
-    do_attack = do_endturn = False
     for ev in pygame.event.get():
         if ev.type == pygame.QUIT:
             running = False
 
         # Delegate to menu handler
         (attack_menu, end_menu, menu_enemy, selected_unit,
-         turn, enemy_index, do_attack, do_endturn) = menu.handle_menu_events(
+            turn, enemy_index, do_attack, do_endturn) = menu.handle_menu_events(
             ev, attack_menu, end_menu, menu_enemy,
             selected_unit, turn, enemy_index,
             enemy_units, player_unit, TILE_SIZE
         )
         if do_attack:
             attack_anim = animations.schedule_attack(player_unit, menu_enemy)
+
         if do_endturn:
             selected_unit.reset_moves()
             selected_unit = None
@@ -124,24 +125,27 @@ while running:
             enemy_index = 0
 
         # Movement click
-        if (ev.type == pygame.MOUSEBUTTONDOWN and
-            turn == "player" and selected_unit and
-            not attack_menu and not end_menu and
-            attack_anim is None):
+        if (ev.type == pygame.MOUSEBUTTONDOWN and turn == "player" and selected_unit and
+            not attack_menu and not end_menu and attack_anim is None):
             mx, my = ev.pos
             gx, gy = mx//TILE_SIZE, my//TILE_SIZE
             dist = abs(gx - selected_unit.start_x) + abs(gy - selected_unit.start_y)
+
             if dist <= selected_unit.max_moves and not is_occupied(gx, gy):
                 px, py = selected_unit.x, selected_unit.y
                 path = []
                 dx_tot = gx - px
                 sx = sign(dx_tot)
+
                 for _ in range(abs(dx_tot)):
                     path.append((sx, 0))
+
                 dy_tot = gy - py
                 sy = sign(dy_tot)
+
                 for _ in range(abs(dy_tot)):
                     path.append((0, sy))
+
                 selected_unit.path = path
 
     # Enemy turn
