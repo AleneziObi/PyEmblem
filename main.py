@@ -20,6 +20,10 @@ GRAY  = (200,200,200)
 RED   = (255,0,0)    # highlights & menu buttons
 GREEN = (0,255,0)    # attack range highlight
 
+# Coordinates of tiles that heal & grant defense
+FORTIFY_TILES = {(5, 4)}
+
+
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Fire Emblem Heroes Clone")
 clock = pygame.time.Clock()
@@ -176,8 +180,17 @@ while running:
         else:
             turn = "player"
             player_unit.reset_moves()
+            # Heal player on fortify tiles
+            if (player_unit.x, player_unit.y) in FORTIFY_TILES:
+                player_unit.hp = min(player_unit.max_hp,
+                                     player_unit.hp + 2)
+                
+            # Heal enemies on fortify tiles
             for e in enemy_units:
                 e.reset_moves()
+                if (e.x, e.y) in FORTIFY_TILES:
+                    e.hp = min(e.max_hp,
+                               e.hp + 2)
     
     animations.process_movement_path(player_unit, is_occupied)
     
@@ -185,6 +198,11 @@ while running:
     if attack_anim:
         still = animations.process_attack_animation(attack_anim, enemy_units, player_unit)
         if not still:
+            tgt = attack_anim["target"]
+            if (tgt.x, tgt.y) in FORTIFY_TILES:
+                # soak 1 point
+                tgt.hp = min(tgt.max_hp, tgt.hp + 1)
+
             # if the player attacked, end their turn here:
             if attack_anim["attacker"] is player_unit:
                 selected_unit.reset_moves()

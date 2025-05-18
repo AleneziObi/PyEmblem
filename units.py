@@ -13,6 +13,7 @@ class Unit:
         self.start_y = y
 
         self.color = color
+        self.max_hp = hp
         self.hp = hp
         self.attack = attack
         self.max_moves = max_moves
