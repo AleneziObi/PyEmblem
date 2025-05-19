@@ -6,4 +6,5 @@
 # 📋 Developer Notes
 
 # 💳 Credits
-- Retro Hurt Sound Effect by Driken5428 from Pixabay 
+- Retro Hurt Sound effect by Driken5428 from Pixabay
+- Healing sound effect: Healing (Ripple) by Dylan Kelk - https://freesound.org/people/SilverIllusionist/sounds/677080/
