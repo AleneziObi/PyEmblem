@@ -2,7 +2,7 @@ import pygame
 import sys
 import random
 from units import Unit, TILE_SIZE, GRID_WIDTH, GRID_HEIGHT
-import animations
+import animations 
 import menu
 from enemies import Enemy
 
@@ -10,6 +10,8 @@ import traceback
 
 pygame.init()
 pygame.mixer.init()
+
+heal_sound = pygame.mixer.Sound("Assets/677080__silverillusionist__healing-soft-ripple.wav")
 
 FPS = 60
 SCREEN_WIDTH = TILE_SIZE * GRID_WIDTH
@@ -23,7 +25,7 @@ RED   = (255,0,0)    # highlights & menu buttons
 GREEN = (0,255,0)    # attack range highlight
 
 # Coordinates of tiles that heal & grant defense
-FORTIFY_TILES = {(5, 4)}
+FORTIFY_TILES = {(2, 2), (5, 2), (0, 3), (3, 3), (2,4), (0,5), (3, 5), (5, 4)}
 
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -34,6 +36,12 @@ font  = pygame.font.SysFont(None, 24)
 # Background
 bg = pygame.image.load("Assets/TestMap.jpg").convert()
 background = pygame.transform.scale(bg, (SCREEN_WIDTH, SCREEN_HEIGHT))
+
+heal_icon = pygame.image.load("Assets/Heal_FE16.png").convert_alpha()
+ICON_SIZE = TILE_SIZE // 3
+heal_icon = pygame.transform.scale(heal_icon, (ICON_SIZE, ICON_SIZE))
+
+heal_effect = []
 
 # Context-menu state
 attack_menu = False
@@ -180,7 +188,7 @@ while running:
                                     moved = True
                             if not moved:
                                 break
-                            
+
                         # then schedule attack
                         if abs(en.x - player_unit.x) + abs(en.y - player_unit.y) <= en.attack_range:
                             attack_anim = animations.schedule_attack(en, player_unit)
@@ -192,15 +200,18 @@ while running:
                 player_unit.reset_moves()
                 # Heal player on fortify tiles
                 if (player_unit.x, player_unit.y) in FORTIFY_TILES:
-                    player_unit.hp = min(player_unit.max_hp,
-                                        player_unit.hp + 2)
+                    player_unit.hp = min(player_unit.max_hp, player_unit.hp + 1)
+                    heal_sound.play()
+                    heal_effect.append((player_unit, pygame.time.get_ticks() + 3000))
+
                     
                 # Heal enemies on fortify tiles
                 for e in enemy_units:
                     e.reset_moves()
                     if (e.x, e.y) in FORTIFY_TILES:
-                        e.hp = min(e.max_hp,
-                                e.hp + 2)
+                        e.hp = min(e.max_hp, e.hp + 1)
+                        heal_sound.play()
+                        heal_effect.append((e, pygame.time.get_ticks() + 3000))
         
         animations.process_movement_path(player_unit, is_occupied)
         
@@ -237,6 +248,17 @@ while running:
         for e in enemy_units:
             draw_unit(screen, e)
         draw_unit(screen, player_unit)
+
+        now = pygame.time.get_ticks()
+        for effect in heal_effect[:]:
+            unit, expire = effect
+            if now < expire:
+                # draw icon at bottom‐right of this unit
+                icon_x = unit.pixel_x + TILE_SIZE - ICON_SIZE
+                icon_y = unit.pixel_y + TILE_SIZE - ICON_SIZE
+                screen.blit(heal_icon, (icon_x, icon_y))
+            else:
+                heal_effect.remove(effect)
 
         menu.draw_menus(screen, font, attack_menu, end_menu)
 
