@@ -5,6 +5,7 @@ from units import Unit, TILE_SIZE, GRID_WIDTH, GRID_HEIGHT
 import animations 
 import menu
 from enemies import Enemy
+from collections import deque
 
 import traceback
 
@@ -72,6 +73,10 @@ def highlight_attack(u, s):
 # Sign function for movement
 def sign(v): return (v > 0) - ( v < 0 )
 
+# in bound check
+def in_bounds(x, y):
+    return 0 <= x < GRID_WIDTH and 0 <= y < GRID_HEIGHT
+
 def draw_unit(s, u):
     # sprite at pixel coords
     s.blit(u.image, (u.pixel_x, u.pixel_y))
@@ -85,9 +90,34 @@ def draw_unit(s, u):
 # Check if a tile is occupied by an enemy or the player
 def is_occupied(x, y):
     if (player_unit.x, player_unit.y) == (x, y): return True
+
     for e in enemy_units:
         if (e.x, e.y) == (x, y): return True
+
     return False
+
+
+# BFS pathfinder from (sx,sy) to (tx,ty), returns list of (x,y) steps (excluding start)
+def find_path(sx, sy, tx, ty):
+    queue = deque([ (sx, sy) ])
+    came_from = { (sx, sy): None }
+    directions = [(1,0),(-1,0),(0,1),(0,-1)]
+    while queue:
+        x, y = queue.popleft()
+        if (x, y) == (tx, ty):
+            # reconstruct path
+            path = []
+            cur = (tx, ty)
+            while cur != (sx, sy):
+                path.append(cur)
+                cur = came_from[cur]
+            return list(reversed(path))
+        for dx, dy in directions:
+            nx, ny = x + dx, y + dy
+            if in_bounds(nx, ny) and (nx, ny) not in came_from and not is_occupied(nx, ny):
+                came_from[(nx, ny)] = (x, y)
+                queue.append((nx, ny))
+    return []  # no path found
 
 
 # --- setup Marth ---
@@ -101,7 +131,7 @@ player_unit.path = []
 enemy_units = []
 occupied = {(player_unit.x, player_unit.y)}
 while len(enemy_units)<3:
-    ex,ey = random.randint(0,GRID_WIDTH-1), random.randint(0,GRID_HEIGHT-1)
+    ex, ey = random.randint(0,GRID_WIDTH-1), random.randint(0,GRID_HEIGHT-1)
     if (ex,ey) in occupied: continue
     e = Enemy(ex, ey, color=(255,0,0), hp=5, attack=2)
     enemy_units.append(e)
@@ -168,33 +198,36 @@ while running:
             if enemy_index < len(enemy_units):
                 en = enemy_units[enemy_index]
                 if not en.has_attacked:
-                    dx, dy = sign(player_unit.x - en.x), sign(player_unit.y - en.y)
-                    # schedule attack if adjacent
+                    # if adjacent, schedule attack
                     if abs(en.x - player_unit.x) + abs(en.y - player_unit.y) <= en.attack_range:
                         attack_anim = animations.schedule_attack(en, player_unit)
                     else:
-                        # move toward player
-                        moved = False
-                        while not en.animating and en.moves_used < en.max_moves and \
-                            abs(en.x - player_unit.x) + abs(en.y - player_unit.y) > en.attack_range:
-                            dx, dy = sign(player_unit.x - en.x), sign(player_unit.y - en.y)
-                            if abs(player_unit.x - en.x) >= abs(player_unit.y - en.y):
-                                if not is_occupied(en.x + dx, en.y):
-                                    en.move(dx, 0)
-                                    moved = True
-                            else:
-                                if not is_occupied(en.x, en.y + dy):
-                                    en.move(0, dy)
-                                    moved = True
-                            if not moved:
-                                break
+                        # 1) build list of free adjacent tiles around player
+                        directions = [(1,0),(-1,0),(0,1),(0,-1)]
+                        adj_goals = []
+                        for dx, dy in directions:
+                            gx, gy = player_unit.x + dx, player_unit.y + dy
+                            if in_bounds(gx, gy) and not is_occupied(gx, gy):
+                                adj_goals.append((gx, gy))
 
-                        # then schedule attack
-                        if abs(en.x - player_unit.x) + abs(en.y - player_unit.y) <= en.attack_range:
-                            attack_anim = animations.schedule_attack(en, player_unit)
+                        # 2) pick a goal tile for *this* enemy
+                        #    cycling through so they fan out
+                        if adj_goals:
+                            goal = adj_goals[enemy_index % len(adj_goals)]
+                            # 3) find a path via BFS
+                            path = find_path(en.x, en.y, goal[0], goal[1])
+                            # 4) move along it up to max_moves
+                            for step in path[: en.max_moves]:
+                                dx, dy = step[0] - en.x, step[1] - en.y
+                                en.move(dx, dy)
+                            # 5) after moving, schedule an attack if now adjacent
+                            if abs(en.x - player_unit.x) + abs(en.y - player_unit.y) <= en.attack_range:
+                                attack_anim = animations.schedule_attack(en, player_unit)
+                # finish turn for this enemy once it's neither animating nor has a pending attack_anim
                 if not en.animating and attack_anim is None:
                     en.reset_moves()
                     enemy_index += 1
+
             else:
                 turn = "player"
                 player_unit.reset_moves()

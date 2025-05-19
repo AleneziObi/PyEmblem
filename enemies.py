@@ -2,7 +2,7 @@ from units import Unit, TILE_SIZE
 import pygame
 
 class Enemy(Unit):
-    def __init__(self, x, y, color, hp=7, attack=2, max_moves=3, attack_range=1):
+    def __init__(self, x, y, color, hp=7, attack=4, max_moves=2, attack_range=1):
         super().__init__(x, y, color, hp, attack, max_moves, attack_range)
 
         self.image = pygame.image.load("Assets/Theif.png").convert_alpha()
