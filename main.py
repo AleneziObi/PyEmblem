@@ -14,6 +14,17 @@ pygame.mixer.init()
 
 heal_sound = pygame.mixer.Sound("Assets/677080__silverillusionist__healing-soft-ripple.wav")
 
+PLAYER_MUSIC = "Assets/006. Offense [Battle - Player Turn].mp3"
+ENEMY_MUSIC  = "Assets/005. Defense [Battle - Enemy Turn].mp3"
+
+# Start with player music
+pygame.mixer.music.load(PLAYER_MUSIC)
+pygame.mixer.music.set_volume(0.5)
+pygame.mixer.music.play(-1)
+last_turn = "player"
+
+
+
 FPS = 60
 SCREEN_WIDTH = TILE_SIZE * GRID_WIDTH
 SCREEN_HEIGHT = TILE_SIZE * GRID_HEIGHT
@@ -220,6 +231,7 @@ while running:
                             for step in path[: en.max_moves]:
                                 dx, dy = step[0] - en.x, step[1] - en.y
                                 en.move(dx, dy)
+                                pygame.time.wait(25)
                             # 5) after moving, schedule an attack if now adjacent
                             if abs(en.x - player_unit.x) + abs(en.y - player_unit.y) <= en.attack_range:
                                 attack_anim = animations.schedule_attack(en, player_unit)
@@ -247,6 +259,15 @@ while running:
                         heal_effect.append((e, pygame.time.get_ticks() + 3000))
         
         animations.process_movement_path(player_unit, is_occupied)
+
+        if turn != last_turn:
+            last_turn = turn
+            if turn == "player":
+                pygame.mixer.music.load(PLAYER_MUSIC)
+            else:
+                pygame.mixer.music.load(ENEMY_MUSIC)
+            pygame.mixer.music.set_volume(0.5)
+            pygame.mixer.music.play(-1)
         
         # Process attack animation
         if attack_anim:
